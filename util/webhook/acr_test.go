@@ -1,6 +1,8 @@
 package webhook
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,12 +11,7 @@ import (
 
 	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
-	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
-	"github.com/argoproj/argo-cd/v3/util/db/mocks"
-	"github.com/argoproj/argo-cd/v3/util/settings"
 )
 
 const testACRSecret = "Bearer my-acr-secret"
@@ -94,37 +91,49 @@ func TestACRParser_Parse(t *testing.T) {
 	}
 }
 
-func TestACRPushEvent_Handler(t *testing.T) {
+func TestACRPushEvent(t *testing.T) {
+	hook := test.NewGlobal()
+	h := NewMockHandlerWithACRSecret(testACRSecret, []string{})
+
 	payload, err := os.ReadFile("testdata/acr-push-event.json")
 	require.NoError(t, err)
 
-	tests := []struct {
-		name       string
-		secret     string
-		auth       string
-		wantStatus int
-	}{
-		{"valid secret", testACRSecret, testACRSecret, http.StatusOK},
-		{"wrong secret", testACRSecret, "Bearer nope", http.StatusUnauthorized},
-		{"disabled without secret", "", testACRSecret, http.StatusBadRequest},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			hook := test.NewGlobal()
-			mockDB := &mocks.ArgoDB{}
-			mockDB.EXPECT().ListRepositories(mock.Anything).Return([]*v1alpha1.Repository{}, nil).Maybe()
-			h := newMockHandler(nil, []string{}, 50*1024*1024, mockDB, &settings.ArgoCDSettings{WebhookACRSecret: tt.secret})
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/webhook?type=acr", io.NopCloser(bytes.NewReader(payload)))
+	req.Header.Set("Authorization", testACRSecret)
+	w := httptest.NewRecorder()
+	h.Handler(w, req)
+	h.Shutdown()
 
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/webhook?type=acr", strings.NewReader(string(payload)))
-			req.Header.Set("Authorization", tt.auth)
-			w := httptest.NewRecorder()
-			h.Handler(w, req)
-			h.Shutdown()
+	assert.Equal(t, http.StatusOK, w.Code)
+	assertLogContains(t, hook, "Received registry webhook event")
+}
 
-			assert.Equal(t, tt.wantStatus, w.Code)
-			if tt.wantStatus == http.StatusOK {
-				assertLogContains(t, hook, "Received registry webhook event")
-			}
-		})
-	}
+// With no secret configured the parser claims nothing, so the request falls through
+// to "Unknown webhook event" rather than reaching an unauthenticated endpoint.
+func TestACRPushEvent_DisabledWithoutSecret(t *testing.T) {
+	h := NewMockHandlerWithACRSecret("", []string{})
+
+	payload, err := os.ReadFile("testdata/acr-push-event.json")
+	require.NoError(t, err)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/webhook?type=acr", io.NopCloser(bytes.NewReader(payload)))
+	req.Header.Set("Authorization", testACRSecret)
+	w := httptest.NewRecorder()
+	h.Handler(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestACRPushEvent_Unauthorized(t *testing.T) {
+	h := NewMockHandlerWithACRSecret(testACRSecret, []string{})
+
+	payload, err := os.ReadFile("testdata/acr-push-event.json")
+	require.NoError(t, err)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/webhook?type=acr", io.NopCloser(bytes.NewReader(payload)))
+	req.Header.Set("Authorization", "Bearer wrong-secret")
+	w := httptest.NewRecorder()
+	h.Handler(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

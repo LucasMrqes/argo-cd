@@ -109,6 +109,14 @@ func NewMockHandlerWithDockerHubSecret(secret string, applicationNamespaces []st
 	return newMockHandler(nil, applicationNamespaces, defaultMaxPayloadSize, mockDB, &argoSettings, objects...)
 }
 
+func NewMockHandlerWithACRSecret(secret string, applicationNamespaces []string, objects ...runtime.Object) *ArgoCDWebhookHandler {
+	mockDB := &mocks.ArgoDB{}
+	mockDB.EXPECT().ListRepositories(mock.Anything).Return([]*v1alpha1.Repository{}, nil).Maybe()
+	argoSettings := settings.ArgoCDSettings{WebhookACRSecret: secret}
+	defaultMaxPayloadSize := int64(50) * 1024 * 1024
+	return newMockHandler(nil, applicationNamespaces, defaultMaxPayloadSize, mockDB, &argoSettings, objects...)
+}
+
 func NewMockHandlerForBitbucketCallback(reactor *reactorDef, applicationNamespaces []string, objects ...runtime.Object) *ArgoCDWebhookHandler {
 	mockDB := &mocks.ArgoDB{}
 	mockDB.EXPECT().ListRepositories(mock.Anything).Return(
