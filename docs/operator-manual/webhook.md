@@ -64,6 +64,7 @@ provider's webhook secret configured in step 1.
 | Azure DevOps    | `webhook.azuredevops.username`   |
 |                 | `webhook.azuredevops.password`   |
 | Harbor          | `webhook.harbor.secret`          |
+| ACR             | `webhook.acr.secret`             |
 
 Edit the Argo CD Kubernetes secret:
 
@@ -427,6 +428,65 @@ As with GHCR, `targetRevision` supports exact tags and [semver constraints](http
 
 > [!NOTE]
 > The `repoURL` host must be `docker.io`. Official images (pushed without a namespace) are matched under the implicit `library/` namespace, e.g. a push to `nginx` matches `oci://docker.io/library/nginx`.
+
+### Azure Container Registry (ACR)
+
+[Azure Container Registry](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-webhook) webhooks notify Argo CD when an artifact is pushed to the registry.
+
+> [!NOTE]
+> ACR neither signs webhook payloads nor sends a provider-specific header. Argo CD therefore identifies ACR requests by a `type=acr` query parameter on the webhook URL, and authenticates them with the `Authorization` custom header of the ACR webhook, compared with `webhook.acr.secret`. Configuring the secret is **required** for ACR webhook support: without it, ACR events are rejected as an unknown webhook event.
+
+#### Configure the Webhook Secret
+
+In `argocd-secret`, set the ACR webhook secret. This value must match the `Authorization` custom header of the ACR webhook:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: argocd-secret
+  namespace: argocd
+type: Opaque
+stringData:
+  webhook.acr.secret: <your-acr-authorization-header-value>
+```
+
+#### Configure the Webhook in ACR
+
+```bash
+az acr webhook create \
+  --registry myregistry \
+  --name argocd \
+  --actions push \
+  --uri "https://<argocd-server>/api/webhook?type=acr" \
+  --headers "Authorization=<your-acr-authorization-header-value>"
+```
+
+Add `--scope <repository>:*` to only send events for one repository. In the Azure portal, the same header goes in **Custom headers** as `Authorization: <value>`.
+
+> [!NOTE]
+> Argo CD only acts on `push` events that carry a tag. Other actions (`delete`, `quarantine`, `chart_push`, `chart_delete`) and digest-only pushes are ignored, and a `ping` is acknowledged with `200 OK`.
+
+#### Example Application
+
+When an artifact is pushed to ACR, Argo CD refreshes Applications with a matching `repoURL` and `targetRevision`. The registry host comes from the `request.host` field of the event, e.g. `myregistry.azurecr.io`:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+spec:
+  source:
+    repoURL: myregistry.azurecr.io/charts
+    chart: mychart
+    targetRevision: 1.2.0
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+```
+
+As with GHCR, `targetRevision` supports exact tags and [semver constraints](https://github.com/Masterminds/semver#checking-version-constraints), and a `chart` field is appended to `repoURL` before matching.
 
 ## Application Annotations Used by Webhooks
 

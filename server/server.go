@@ -849,6 +849,7 @@ func (server *ArgoCDServer) watchSettings() {
 	prevBitbucketServerSecret := server.settings.GetWebhookBitbucketServerSecret()
 	prevGogsSecret := server.settings.GetWebhookGogsSecret()
 	prevHarborSecret := server.settings.GetWebhookHarborSecret()
+	prevACRSecret := server.settings.GetWebhookACRSecret()
 	prevExtConfig := server.settings.ExtensionConfig
 	var prevCert, prevCertKey string
 	if server.settings.Certificate != nil && !server.Insecure {
@@ -906,6 +907,10 @@ func (server *ArgoCDServer) watchSettings() {
 		}
 		if prevHarborSecret != server.settings.GetWebhookHarborSecret() {
 			log.Infof("harbor secret modified. restarting")
+			break
+		}
+		if prevACRSecret != server.settings.GetWebhookACRSecret() {
+			log.Infof("acr secret modified. restarting")
 			break
 		}
 		if !reflect.DeepEqual(prevExtConfig, server.settings.ExtensionConfig) {

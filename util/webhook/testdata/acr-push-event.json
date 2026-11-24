@@ -1,0 +1,19 @@
+{
+  "id": "cb8c3971-9adc-488b-bdd8-43cbb4974ff5",
+  "timestamp": "2023-11-17T16:52:01.343145347Z",
+  "action": "push",
+  "target": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "size": 524,
+    "digest": "sha256:80f0d5c8786bb9e621a45ece0db56d11cdc624ad20da9fe62e9d25490f331d7d",
+    "length": 524,
+    "repository": "charts/mychart",
+    "tag": "1.2.0"
+  },
+  "request": {
+    "id": "3cbb6949-7549-4fa1-86cd-a6d5451dffc7",
+    "host": "myregistry.azurecr.io",
+    "method": "PUT",
+    "useragent": "Helm/3.17.0"
+  }
+}

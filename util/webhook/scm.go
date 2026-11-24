@@ -46,6 +46,7 @@ type ParserOptions struct {
 	Harbor                bool
 	GHCR                  bool
 	DockerHub             bool
+	ACR                   bool
 }
 
 // NewParsers builds the parsers enabled in opts, configured with the webhook
@@ -106,6 +107,9 @@ func NewParsers(set *settings.ArgoCDSettings, opts ParserOptions) []Extractor {
 	}
 	if opts.DockerHub {
 		parsers = append(parsers, newDockerHubParser(set.GetWebhookDockerHubSecret()))
+	}
+	if opts.ACR {
+		parsers = append(parsers, newACRParser(set.GetWebhookACRSecret()))
 	}
 
 	return parsers

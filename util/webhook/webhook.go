@@ -123,6 +123,7 @@ func ArgoCDParserOptions() ParserOptions {
 		Harbor:    true,
 		GHCR:      true,
 		DockerHub: true,
+		ACR:       true,
 	}
 }
 
